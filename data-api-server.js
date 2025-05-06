@@ -21,7 +21,21 @@ async function connectToMongo() {
     await client.connect();
     const db = client.db(ATLAS_DB);
     collection = db.collection(ATLAS_COLLECTION);
+    // Ensure unique index on id
+    await collection.createIndex({ id: 1 }, { unique: true });
   }
+}
+
+// Utility: Get next auto-incremented id
+async function getNextId() {
+  await connectToMongo();
+  const counters = collection.db.collection('counters');
+  const result = await counters.findOneAndUpdate(
+    { _id: 'autoid' },
+    { $inc: { seq: 1 } },
+    { upsert: true, returnDocument: 'after' }
+  );
+  return result.value.seq;
 }
 
 // Insert One
@@ -29,8 +43,12 @@ app.post('/insertOne', async (req, res) => {
   try {
     await connectToMongo();
     const doc = req.body.document;
+    // Only add id if not present
+    if (doc.id == null) {
+      doc.id = await getNextId();
+    }
     const result = await collection.insertOne(doc);
-    res.json({ insertedId: result.insertedId });
+    res.json({ insertedId: result.insertedId, id: doc.id });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -56,6 +74,22 @@ app.post('/updateOne', async (req, res) => {
     const update = req.body.update;
     const result = await collection.updateOne(filter, update);
     res.json({ matchedCount: result.matchedCount, modifiedCount: result.modifiedCount });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Batch Update Many
+app.post('/updateMany', async (req, res) => {
+  try {
+    await connectToMongo();
+    const updates = req.body.updates; // Array of { filter, update }
+    const results = [];
+    for (const { filter, update } of updates) {
+      const result = await collection.updateOne(filter, update);
+      results.push({ matchedCount: result.matchedCount, modifiedCount: result.modifiedCount });
+    }
+    res.json({ results });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
