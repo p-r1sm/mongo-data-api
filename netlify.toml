@@ -1,0 +1,7 @@
+[build]
+  command = "npm run build"
+  publish = "."
+
+[dev]
+  command = "node data-api-server.js"
+  port = 3000
