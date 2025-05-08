@@ -43,7 +43,12 @@ app.post('/insertOne', async (req, res) => {
   console.log('[POST] /insertOne - Payload:', req.body);
   try {
     await connectToMongo();
-    const doc = req.body.document;
+    let doc = req.body.document;
+    if (doc && doc._id) {
+      // Remove _id to ensure MongoDB generates it automatically
+      const { _id, ...rest } = doc;
+      doc = rest;
+    }
     const result = await collection.insertOne(doc);
     console.log('[SUCCESS] /insertOne - MongoDB result:', result);
     res.json({ insertedId: result.insertedId });
@@ -77,7 +82,12 @@ app.post('/updateOne', async (req, res) => {
     await connectToMongo();
     let filter = req.body.filter;
     filter = normalizeIdInFilter(filter);
-    const update = req.body.update;
+    let update = req.body.update;
+    if (update && update.$set && update.$set._id) {
+      // Remove _id from $set to avoid immutable field error
+      const { _id, ...rest } = update.$set;
+      update = { ...update, $set: rest };
+    }
     const result = await collection.updateOne(filter, update);
     console.log(`[SUCCESS] /updateOne - Matched: ${result.matchedCount}, Modified: ${result.modifiedCount}`);
     console.log('[RESULT] /updateOne - MongoDB result:', result);
@@ -95,8 +105,14 @@ app.post('/updateMany', async (req, res) => {
     await connectToMongo();
     const updates = req.body.updates; // Array of { filter, update }
     const results = [];
-    for (const { filter: rawFilter, update } of updates) {
+    for (const { filter: rawFilter, update: rawUpdate } of updates) {
       const filter = normalizeIdInFilter(rawFilter);
+      let update = rawUpdate;
+      if (update && update.$set && update.$set._id) {
+        // Remove _id from $set to avoid immutable field error
+        const { _id, ...rest } = update.$set;
+        update = { ...update, $set: rest };
+      }
       const result = await collection.updateOne(filter, update);
       results.push({ matchedCount: result.matchedCount, modifiedCount: result.modifiedCount });
       console.log('[RESULT] /updateMany - Single update result:', result);
