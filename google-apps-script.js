@@ -1,5 +1,5 @@
 // CONFIGURATION
-const API_BASE = 'http://localhost:3000'; // Change to your deployed API URL if needed
+const API_BASE = 'https://mongo-data-api-v1g7.onrender.com'; // Change to your deployed API URL if needed
 
 // Utility: HTTP POST
 function apiPost(endpoint, payload) {
@@ -63,13 +63,30 @@ function pushToMongo() {
 function deleteSelectedRow() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   const row = sheet.getActiveRange().getRow();
-  if (row === 1) return; // Don't delete header
-
-  const id = sheet.getRange(row, 1).getValue();
-  if (id) {
-    apiPost('/deleteOne', { filter: { id: id } });
+  if (row < 2) {
+    SpreadsheetApp.getUi().alert('Cannot delete the header or an invalid row.');
+    return;
   }
-  sheet.deleteRow(row);
+
+  // Get the id from column 1
+  const id = sheet.getRange(row, 1).getValue();
+  if (!id) {
+    SpreadsheetApp.getUi().alert('No ID found in the selected row.');
+    return;
+  }
+
+  try {
+    // Delete from MongoDB first
+    const response = apiPost('/deleteOne', { filter: { id: id } });
+    if (response && response.deletedCount === 1) {
+      sheet.deleteRow(row);
+      SpreadsheetApp.getUi().alert('Row deleted from MongoDB and sheet.');
+    } else {
+      SpreadsheetApp.getUi().alert('Failed to delete from MongoDB. Row not deleted from sheet.');
+    }
+  } catch (e) {
+    SpreadsheetApp.getUi().alert('Error deleting row: ' + e.message);
+  }
 }
 
 // 4. Add custom menu for ease of use
