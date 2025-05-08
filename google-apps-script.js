@@ -41,16 +41,16 @@ function pushToMongo() {
     const row = data[i];
     const doc = {};
     headers.forEach((h, idx) => doc[h] = row[idx]);
-    if (doc.id) {
+    if (doc._id) {
       // Prepare update statement for this doc
       updates.push({
-        filter: { id: doc.id },
+        filter: { _id: doc._id },
         update: { $set: doc }
       });
     } else {
       // Insert
       const res = apiPost('/insertOne', { document: doc });
-      sheet.getRange(i + 1, headers.indexOf('id') + 1).setValue(res.id); // Set new id in sheet
+      sheet.getRange(i + 1, headers.indexOf('_id') + 1).setValue(res.insertedId); // Set new _id in sheet
     }
   }
   // Batch update
@@ -68,16 +68,16 @@ function deleteSelectedRow() {
     return;
   }
 
-  // Get the id from column 1
-  const id = sheet.getRange(row, 1).getValue();
-  if (!id) {
+  // Get the _id from column 1
+  const _id = sheet.getRange(row, 1).getValue();
+  if (!_id) {
     SpreadsheetApp.getUi().alert('No ID found in the selected row.');
     return;
   }
 
   try {
     // Delete from MongoDB first
-    const response = apiPost('/deleteOne', { filter: { id: id } });
+    const response = apiPost('/deleteOne', { filter: { _id: _id } });
     if (response && response.deletedCount === 1) {
       sheet.deleteRow(row);
       SpreadsheetApp.getUi().alert('Row deleted from MongoDB and sheet.');
