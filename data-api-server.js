@@ -31,7 +31,7 @@ app.post('/insertOne', async (req, res) => {
     await connectToMongo();
     const doc = req.body.document;
     const result = await collection.insertOne(doc);
-    console.log('[SUCCESS] /insertOne - InsertedId:', result.insertedId);
+    console.log('[SUCCESS] /insertOne - MongoDB result:', result);
     res.json({ insertedId: result.insertedId });
   } catch (err) {
     console.error('[ERROR] /insertOne', err);
@@ -47,6 +47,7 @@ app.post('/find', async (req, res) => {
     const filter = req.body.filter || {};
     const docs = await collection.find(filter).toArray();
     console.log(`[SUCCESS] /find - Returned ${docs.length} documents`);
+    console.log('[RESULT] /find - Documents:', docs);
     res.json({ documents: docs });
   } catch (err) {
     console.error('[ERROR] /find', err);
@@ -63,6 +64,7 @@ app.post('/updateOne', async (req, res) => {
     const update = req.body.update;
     const result = await collection.updateOne(filter, update);
     console.log(`[SUCCESS] /updateOne - Matched: ${result.matchedCount}, Modified: ${result.modifiedCount}`);
+    console.log('[RESULT] /updateOne - MongoDB result:', result);
     res.json({ matchedCount: result.matchedCount, modifiedCount: result.modifiedCount });
   } catch (err) {
     console.error('[ERROR] /updateOne', err);
@@ -80,6 +82,7 @@ app.post('/updateMany', async (req, res) => {
     for (const { filter, update } of updates) {
       const result = await collection.updateOne(filter, update);
       results.push({ matchedCount: result.matchedCount, modifiedCount: result.modifiedCount });
+      console.log('[RESULT] /updateMany - Single update result:', result);
     }
     console.log(`[SUCCESS] /updateMany - Updated ${results.length} documents`);
     res.json({ results });
@@ -97,6 +100,7 @@ app.post('/deleteOne', async (req, res) => {
     const filter = req.body.filter;
     const result = await collection.deleteOne(filter);
     console.log(`[SUCCESS] /deleteOne - DeletedCount: ${result.deletedCount}`);
+    console.log('[RESULT] /deleteOne - MongoDB result:', result);
     res.json({ deletedCount: result.deletedCount });
   } catch (err) {
     console.error('[ERROR] /deleteOne', err);
