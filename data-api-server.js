@@ -7,6 +7,18 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+// Helper to convert _id string to ObjectId in filters
+function normalizeIdInFilter(filter) {
+  if (filter && typeof filter._id === 'string' && filter._id.match(/^[a-fA-F0-9]{24}$/)) {
+    try {
+      filter._id = new ObjectId(filter._id);
+    } catch (e) {
+      // If conversion fails, leave as string
+    }
+  }
+  return filter;
+}
+
 const {
   ATLAS_URI,
   ATLAS_DB,
@@ -44,7 +56,8 @@ app.post('/find', async (req, res) => {
   console.log('[POST] /find - Payload:', req.body);
   try {
     await connectToMongo();
-    const filter = req.body.filter || {};
+    let filter = req.body.filter || {};
+    filter = normalizeIdInFilter(filter);
     const docs = await collection.find(filter).toArray();
     console.log(`[SUCCESS] /find - Returned ${docs.length} documents`);
     console.log('[RESULT] /find - Documents:', docs);
@@ -60,7 +73,8 @@ app.post('/updateOne', async (req, res) => {
   console.log('[POST] /updateOne - Payload:', req.body);
   try {
     await connectToMongo();
-    const filter = req.body.filter;
+    let filter = req.body.filter;
+    filter = normalizeIdInFilter(filter);
     const update = req.body.update;
     const result = await collection.updateOne(filter, update);
     console.log(`[SUCCESS] /updateOne - Matched: ${result.matchedCount}, Modified: ${result.modifiedCount}`);
@@ -79,7 +93,8 @@ app.post('/updateMany', async (req, res) => {
     await connectToMongo();
     const updates = req.body.updates; // Array of { filter, update }
     const results = [];
-    for (const { filter, update } of updates) {
+    for (const { filter: rawFilter, update } of updates) {
+      const filter = normalizeIdInFilter(rawFilter);
       const result = await collection.updateOne(filter, update);
       results.push({ matchedCount: result.matchedCount, modifiedCount: result.modifiedCount });
       console.log('[RESULT] /updateMany - Single update result:', result);
@@ -97,7 +112,8 @@ app.post('/deleteOne', async (req, res) => {
   console.log('[POST] /deleteOne - Payload:', req.body);
   try {
     await connectToMongo();
-    const filter = req.body.filter;
+    let filter = req.body.filter;
+    filter = normalizeIdInFilter(filter);
     const result = await collection.deleteOne(filter);
     console.log(`[SUCCESS] /deleteOne - DeletedCount: ${result.deletedCount}`);
     console.log('[RESULT] /deleteOne - MongoDB result:', result);
