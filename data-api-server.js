@@ -9,12 +9,14 @@ app.use(cors());
 
 // Helper to convert _id string to ObjectId in filters
 function normalizeIdInFilter(filter) {
-  if (filter && typeof filter._id === 'string' && filter._id.match(/^[a-fA-F0-9]{24}$/)) {
-    try {
-      filter._id = new ObjectId(filter._id);
-    } catch (e) {
-      // If conversion fails, leave as string
-    }
+  if (!filter) return filter;
+  if (
+    typeof filter._id === 'string' &&
+    ObjectId.isValid(filter._id) &&
+    !(filter._id instanceof ObjectId)
+  ) {
+    // Return a new filter object to avoid mutating the original
+    return { ...filter, _id: new ObjectId(filter._id) };
   }
   return filter;
 }
