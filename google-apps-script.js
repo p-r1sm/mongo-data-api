@@ -40,7 +40,20 @@ function pullFromMongo() {
     }));
   });
   sheet.getRange(1, 1, allRows.length, headers.length).setValues(allRows);
+
+  // Cache original data in a hidden sheet for diffing
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const cacheName = `__cache_${collection}`;
+  let cacheSheet = ss.getSheetByName(cacheName);
+  if (!cacheSheet) {
+    cacheSheet = ss.insertSheet(cacheName);
+    cacheSheet.hideSheet();
+  } else {
+    cacheSheet.clear();
+  }
+  cacheSheet.getRange(1, 1, allRows.length, headers.length).setValues(allRows);
 }
+
 
 // 2. Push changes from sheet to MongoDB (batch updates)
 function pushToMongo() {
@@ -48,7 +61,15 @@ function pushToMongo() {
   const collection = sheet.getName();
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const cacheName = `__cache_${collection}`;
+  const cacheSheet = ss.getSheetByName(cacheName);
+  let original = [];
+  if (cacheSheet) {
+    original = cacheSheet.getDataRange().getValues();
+  }
   const updates = [];
+  let changedRows = 0;
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     const doc = {};
@@ -61,33 +82,60 @@ function pushToMongo() {
         } catch (e) {}
       }
       // Convert ISO date strings to Date objects
-      if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(.\d{3})?Z$/.test(value)) {
+      if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/.test(value)) {
         try {
           value = new Date(value);
         } catch (e) {}
       }
       doc[h] = value;
     });
-    if (doc._id) {
-      // Prepare update statement for this doc
-      const docCopy = { ...doc };
-      delete docCopy._id; // Remove _id from update doc
-      updates.push({
-        filter: { _id: doc._id },
-        update: { $set: docCopy }
-      });
+    // Compare with cache/original
+    let isChanged = true;
+    if (original.length > i) {
+      const origRow = original[i];
+      isChanged = false;
+      for (let j = 0; j < headers.length; j++) {
+        if (String(row[j]) !== String(origRow[j])) {
+          isChanged = true;
+          break;
+        }
+      }
+    }
+    if (isChanged) {
+      changedRows++;
+      // Highlight changed row
+      sheet.getRange(i + 1, 1, 1, headers.length).setBackground('#fff2cc');
+      if (doc._id) {
+        // Prepare update statement for this doc
+        const docCopy = { ...doc };
+        delete docCopy._id; // Remove _id from update doc
+        updates.push({
+          filter: { _id: doc._id },
+          update: { $set: docCopy }
+        });
+      } else {
+        // Insert
+        if (doc._id === '' || doc._id == null) delete doc._id; // Remove _id if empty
+        const res = apiPost('/insertOne', { collection, document: doc });
+        sheet.getRange(i + 1, headers.indexOf('_id') + 1).setValue(res.insertedId); // Set new _id in sheet
+      }
     } else {
-      // Insert
-      if (doc._id === '' || doc._id == null) delete doc._id; // Remove _id if empty
-      const res = apiPost('/insertOne', { collection, document: doc });
-      sheet.getRange(i + 1, headers.indexOf('_id') + 1).setValue(res.insertedId); // Set new _id in sheet
+      // No change, clear highlight
+      sheet.getRange(i + 1, 1, 1, headers.length).setBackground(null);
     }
   }
-  // Batch update
-  if (updates.length > 0) {
+  // Only update if there are changed rows
+  if (updates.length === 1) {
+    // Only one row changed, use updateOne
+    const u = updates[0];
+    apiPost('/updateOne', { collection, filter: u.filter, update: u.update });
+  } else if (updates.length > 1) {
+    // Batch update
     apiPost('/updateMany', { collection, updates });
   }
+  SpreadsheetApp.getUi().alert(changedRows + ' row(s) updated.');
 }
+
 
 // 3. Delete selected row from MongoDB and sheet
 function deleteSelectedRow() {
