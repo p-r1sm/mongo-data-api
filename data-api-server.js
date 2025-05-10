@@ -87,9 +87,9 @@ app.use(cors());
 app.post('/ensureCollection', async (req, res) => {
   try {
     await connectToMongo();
+    const { db } = getDbAndCollection({ collectionName: req.body.collection });
     const collectionName = req.body.collection;
     if (!collectionName) return res.status(400).json({ error: 'Missing collection name' });
-    const db = global.mongoClient.db(process.env.ATLAS_DB);
     const collections = await db.listCollections({}, { nameOnly: true }).toArray();
     const exists = collections.some(col => col.name === collectionName);
     if (!exists) {
@@ -129,12 +129,19 @@ const {
 
 let client, collection;
 
+function getDbAndCollection({ collectionName } = {}) {
+  const useEfforts = !!process.env.EFFORTS_MONGO_URL;
+  const dbName = useEfforts ? 'efforts' : process.env.ATLAS_DB;
+  const dbClient = client;
+  const db = dbClient.db(dbName);
+  const colName = collectionName || process.env.ATLAS_COLLECTION || 'test';
+  return { db, collection: db.collection(colName) };
+}
+
 async function connectToMongo() {
   if (!client) {
-    client = new MongoClient(EFFORTS_MONGO_URL || ATLAS_URI);
+    client = new MongoClient(process.env.EFFORTS_MONGO_URL || process.env.ATLAS_URI);
     await client.connect();
-    const db = client.db(ATLAS_DB);
-    collection = db.collection(ATLAS_COLLECTION);
   }
 }
 
@@ -143,8 +150,7 @@ app.post('/insertOne', async (req, res) => {
   console.log('[POST] /insertOne - Payload:', req.body);
   try {
     await connectToMongo();
-    const collectionName = req.body.collection || process.env.ATLAS_COLLECTION;
-    const dynamicCollection = getCollection(collectionName);
+    const { collection: dynamicCollection } = getDbAndCollection({ collectionName: req.body.collection });
     let doc = req.body.document;
     if (doc && doc._id) {
       // Remove _id to ensure MongoDB generates it automatically
@@ -165,8 +171,7 @@ app.post('/find', async (req, res) => {
   console.log('[POST] /find - Payload:', req.body);
   try {
     await connectToMongo();
-    const collectionName = req.body.collection || process.env.ATLAS_COLLECTION;
-    const dynamicCollection = getCollection(collectionName);
+    const { collection: dynamicCollection } = getDbAndCollection({ collectionName: req.body.collection });
     let filter = req.body.filter || {};
     filter = normalizeIdInFilter(filter);
     const docs = await dynamicCollection.find(filter).toArray();
@@ -184,8 +189,7 @@ app.post('/updateOne', async (req, res) => {
   console.log('[POST] /updateOne - Payload:', req.body);
   try {
     await connectToMongo();
-    const collectionName = req.body.collection || process.env.ATLAS_COLLECTION;
-    const dynamicCollection = getCollection(collectionName);
+    const { collection: dynamicCollection } = getDbAndCollection({ collectionName: req.body.collection });
     let filter = req.body.filter;
     filter = normalizeIdInFilter(filter);
     let update = req.body.update;
@@ -209,8 +213,7 @@ app.post('/updateMany', async (req, res) => {
   console.log('[POST] /updateMany - Payload:', req.body);
   try {
     await connectToMongo();
-    const collectionName = req.body.collection || process.env.ATLAS_COLLECTION;
-    const dynamicCollection = getCollection(collectionName);
+    const { collection: dynamicCollection } = getDbAndCollection({ collectionName: req.body.collection });
     const updates = req.body.updates; // Array of { filter, update }
     const results = [];
     for (const { filter: rawFilter, update: rawUpdate } of updates) {
@@ -238,8 +241,7 @@ app.post('/deleteOne', async (req, res) => {
   console.log('[POST] /deleteOne - Payload:', req.body);
   try {
     await connectToMongo();
-    const collectionName = req.body.collection || process.env.ATLAS_COLLECTION;
-    const dynamicCollection = getCollection(collectionName);
+    const { collection: dynamicCollection } = getDbAndCollection({ collectionName: req.body.collection });
     let filter = req.body.filter;
     filter = normalizeIdInFilter(filter);
     const result = await dynamicCollection.deleteOne(filter);

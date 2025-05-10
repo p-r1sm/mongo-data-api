@@ -55,14 +55,30 @@ async function initialSync(atlasCollection, localCollection) {
 }
 
 async function main() {
-  // Connect to Atlas and local MongoDB (no deprecated options)
-  const atlasClient = new MongoClient(ATLAS_URI);
+  const {
+    EFFORTS_MONGO_URL,
+    LOCAL_MONGO_URI,
+    ATLAS_URI,
+    ATLAS_DB,
+    ATLAS_COLLECTION
+  } = process.env;
+
+  let sourceUri, sourceDbName;
+  if (EFFORTS_MONGO_URL) {
+    sourceUri = EFFORTS_MONGO_URL;
+    sourceDbName = 'efforts';
+  } else {
+    sourceUri = ATLAS_URI;
+    sourceDbName = ATLAS_DB;
+  }
+
+  const atlasClient = new MongoClient(sourceUri);
   const localClient = new MongoClient(LOCAL_MONGO_URI);
   await atlasClient.connect();
   await localClient.connect();
 
-  const atlasDb = atlasClient.db(ATLAS_DB);
-  const localDb = localClient.db(ATLAS_DB);
+  const atlasDb = atlasClient.db(sourceDbName);
+  const localDb = localClient.db(sourceDbName);
   const atlasCollection = atlasDb.collection(ATLAS_COLLECTION);
   const localCollection = localDb.collection(ATLAS_COLLECTION);
 
