@@ -26,12 +26,20 @@ function pullFromMongo() {
   if (result.documents.length === 0) return;
 
   const headers = Object.keys(result.documents[0]);
-  sheet.appendRow(headers);
-
-  // Add rows
+  // Build all rows for batch write
+  const allRows = [headers];
   result.documents.forEach(doc => {
-    sheet.appendRow(headers.map(h => doc[h]));
+    allRows.push(headers.map(h => {
+      const val = doc[h];
+      // Dates (MongoDB's $date or JS Date)
+      if (val && typeof val === 'object' && val.$date) return new Date(val.$date).toISOString();
+      if (val instanceof Date) return val.toISOString();
+      // Arrays/Objects (but not null)
+      if (val && typeof val === 'object') return JSON.stringify(val);
+      return val;
+    }));
   });
+  sheet.getRange(1, 1, allRows.length, headers.length).setValues(allRows);
 }
 
 // 2. Push changes from sheet to MongoDB (batch updates)
@@ -43,7 +51,22 @@ function pushToMongo() {
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     const doc = {};
-    headers.forEach((h, idx) => doc[h] = row[idx]);
+    headers.forEach((h, idx) => {
+      let value = row[idx];
+      // Try to parse JSON for arrays/objects
+      if (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) {
+        try {
+          value = JSON.parse(value);
+        } catch (e) {}
+      }
+      // Convert ISO date strings to Date objects
+      if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(.\d{3})?Z$/.test(value)) {
+        try {
+          value = new Date(value);
+        } catch (e) {}
+      }
+      doc[h] = value;
+    });
     if (doc._id) {
       // Prepare update statement for this doc
       const docCopy = { ...doc };
@@ -112,4 +135,26 @@ function onOpen() {
     .addItem('Push changes to MongoDB', 'pushToMongo')
     .addItem('Delete selected row', 'deleteSelectedRow')
     .addToUi();
+
+  // Add a User Guide sheet if not present
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const guideName = 'User Guide';
+  let guideSheet = ss.getSheetByName(guideName);
+  if (!guideSheet) {
+    guideSheet = ss.insertSheet(guideName, 0);
+    guideSheet.getRange(1, 1, 11, 3).setValues([
+      ['MongoDB Google Sheets Sync - User Guide', '', 'Sample Value'],
+      ['Editing Arrays/Objects:', 'Enter valid JSON (e.g., [1,2,3] or {"a":1}) in the cell.', '[1,2,3] or {"foo":42}'],
+      ['Editing Dates:', 'Enter date as ISO string (e.g., 2024-05-10T12:00:00.000Z).', '2024-05-10T12:00:00.000Z'],
+      ['Editing Primitives:', 'Edit numbers, strings, booleans directly.', '42, hello, true'],
+      ['Adding Rows:', 'Add a new row at the bottom. Leave _id blank for new docs.', ''],
+      ['Deleting Rows:', 'Select a row and use the menu. Confirmation required.', ''],
+      ['Syncing:', 'Use the custom menu to pull/push data.', ''],
+      ['Notes:', 'Malformed JSON will be ignored. Dates must be valid ISO format.', '{"a":1}, [2,3], 2024-05-10T12:00:00.000Z'],
+      ['Best Practice:', 'Double-check JSON syntax when editing arrays/objects.', ''],
+      ['Need Help?', 'Contact your admin or developer.', '']
+    ]);
+    guideSheet.setColumnWidths(1, 3, 320);
+    guideSheet.setFrozenRows(1);
+  }
 }
