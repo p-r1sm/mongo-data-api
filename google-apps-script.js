@@ -45,6 +45,7 @@ function pullFromMongo() {
 // 2. Push changes from sheet to MongoDB (batch updates)
 function pushToMongo() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const collection = sheet.getName();
   const data = sheet.getDataRange().getValues();
   const headers = data[0];
   const updates = [];

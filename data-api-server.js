@@ -80,7 +80,7 @@ async function startAtlasSync() {
 // --- End sync.js logic ---
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(cors());
 
 // Ensure Collection Exists or Create It
@@ -158,7 +158,7 @@ app.post('/insertOne', async (req, res) => {
       doc = rest;
     }
     const result = await dynamicCollection.insertOne(doc);
-    console.log('[SUCCESS] /insertOne - MongoDB result:', result);
+    console.log('[SUCCESS] /insertOne - MongoDB result keys:', Object.keys(result));
     res.json({ insertedId: result.insertedId });
   } catch (err) {
     console.error('[ERROR] /insertOne', err);
@@ -176,7 +176,9 @@ app.post('/find', async (req, res) => {
     filter = normalizeIdInFilter(filter);
     const docs = await dynamicCollection.find(filter).toArray();
     console.log(`[SUCCESS] /find - Returned ${docs.length} documents`);
-    console.log('[RESULT] /find - Documents:', docs);
+    if (docs.length > 0) {
+      console.log('[RESULT] /find - Document keys:', Object.keys(docs[0]));
+    }
     res.json({ documents: docs });
   } catch (err) {
     console.error('[ERROR] /find', err);
@@ -200,7 +202,7 @@ app.post('/updateOne', async (req, res) => {
     }
     const result = await dynamicCollection.updateOne(filter, update);
     console.log(`[SUCCESS] /updateOne - Matched: ${result.matchedCount}, Modified: ${result.modifiedCount}`);
-    console.log('[RESULT] /updateOne - MongoDB result:', result);
+    console.log('[RESULT] /updateOne - MongoDB result keys:', Object.keys(result));
     res.json({ matchedCount: result.matchedCount, modifiedCount: result.modifiedCount });
   } catch (err) {
     console.error('[ERROR] /updateOne', err);
@@ -226,7 +228,7 @@ app.post('/updateMany', async (req, res) => {
       }
       const result = await dynamicCollection.updateOne(filter, update);
       results.push({ matchedCount: result.matchedCount, modifiedCount: result.modifiedCount });
-      console.log('[RESULT] /updateMany - Single update result:', result);
+      console.log('[RESULT] /updateMany - Single update result keys:', Object.keys(result));
     }
     console.log(`[SUCCESS] /updateMany - Updated ${results.length} documents`);
     res.json({ results });
@@ -246,7 +248,7 @@ app.post('/deleteOne', async (req, res) => {
     filter = normalizeIdInFilter(filter);
     const result = await dynamicCollection.deleteOne(filter);
     console.log(`[SUCCESS] /deleteOne - DeletedCount: ${result.deletedCount}`);
-    console.log('[RESULT] /deleteOne - MongoDB result:', result);
+    console.log('[RESULT] /deleteOne - MongoDB result keys:', Object.keys(result));
     res.json({ deletedCount: result.deletedCount });
   } catch (err) {
     console.error('[ERROR] /deleteOne', err);
