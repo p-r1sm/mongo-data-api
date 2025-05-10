@@ -16,7 +16,10 @@ function apiPost(endpoint, payload) {
 // 1. Pull all docs from MongoDB and populate the sheet
 function pullFromMongo() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  const result = apiPost('/find', {});
+  const collection = sheet.getName();
+  // Ensure the collection exists (create if not)
+  apiPost('/ensureCollection', { collection });
+  const result = apiPost('/find', { collection });
 
   // Clear and set headers
   sheet.clear();
@@ -43,19 +46,22 @@ function pushToMongo() {
     headers.forEach((h, idx) => doc[h] = row[idx]);
     if (doc._id) {
       // Prepare update statement for this doc
+      const docCopy = { ...doc };
+      delete docCopy._id; // Remove _id from update doc
       updates.push({
         filter: { _id: doc._id },
-        update: { $set: doc }
+        update: { $set: docCopy }
       });
     } else {
       // Insert
-      const res = apiPost('/insertOne', { document: doc });
+      if (doc._id === '' || doc._id == null) delete doc._id; // Remove _id if empty
+      const res = apiPost('/insertOne', { collection, document: doc });
       sheet.getRange(i + 1, headers.indexOf('_id') + 1).setValue(res.insertedId); // Set new _id in sheet
     }
   }
   // Batch update
   if (updates.length > 0) {
-    apiPost('/updateMany', { updates });
+    apiPost('/updateMany', { collection, updates });
   }
 }
 
@@ -77,7 +83,8 @@ function deleteSelectedRow() {
 
   try {
     // Delete from MongoDB first
-    const response = apiPost('/deleteOne', { filter: { _id: _id } });
+    const collection = sheet.getName();
+    const response = apiPost('/deleteOne', { collection, filter: { _id: _id } });
     if (response && response.deletedCount === 1) {
       sheet.deleteRow(row);
       SpreadsheetApp.getUi().alert('Row deleted from MongoDB and sheet.');
