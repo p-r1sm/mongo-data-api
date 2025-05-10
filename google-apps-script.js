@@ -81,18 +81,26 @@ function deleteSelectedRow() {
     return;
   }
 
+  // Confirmation popup
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.alert('Are you sure you want to delete this row?', ui.ButtonSet.YES_NO);
+  if (response !== ui.Button.YES) {
+    ui.alert('Deletion cancelled.');
+    return;
+  }
+
   try {
     // Delete from MongoDB first
     const collection = sheet.getName();
-    const response = apiPost('/deleteOne', { collection, filter: { _id: _id } });
-    if (response && response.deletedCount === 1) {
+    const delResponse = apiPost('/deleteOne', { collection, filter: { _id: _id } });
+    if (delResponse && delResponse.deletedCount === 1) {
       sheet.deleteRow(row);
-      SpreadsheetApp.getUi().alert('Row deleted from MongoDB and sheet.');
+      ui.alert('Row deleted from MongoDB and sheet.');
     } else {
-      SpreadsheetApp.getUi().alert('Failed to delete from MongoDB. Row not deleted from sheet.');
+      ui.alert('Failed to delete from MongoDB. Row not deleted from sheet.');
     }
   } catch (e) {
-    SpreadsheetApp.getUi().alert('Error deleting row: ' + e.message);
+    ui.alert('Error deleting row: ' + e.message);
   }
 }
 
